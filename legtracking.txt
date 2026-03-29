@@ -1,0 +1,95 @@
+import cv2
+import mediapipe as mp
+import time 
+# Sử dụng trực tiếp từ mp.solutions là cách chuẩn nhất cho bản 0.10.33
+mp_pose = mp.solutions.pose
+mp_draw = mp.solutions.drawing_utils
+
+# Đảm bảo dùng camera 0 cho laptop
+
+cap = cv2.VideoCapture(0)
+cap.set(3, 1280)
+cap.set(4, 720)
+
+def main():
+    global prev_time
+    # Thay đổi từ mp_hands.Hands sang mp_pose.Pose
+    with mp_pose.Pose(
+        model_complexity=0,
+        min_detection_confidence=0.7,
+        min_tracking_confidence=0.5,
+    ) as pose:
+        while True:
+            ret, frame = cap.read()
+            max_attempts = 5
+            attempt = 0
+            while not ret and attempt < max_attempts:
+                attempt += 1
+                time.sleep(0.1)
+                ret, frame = cap.read()
+            if not ret:
+                print(f"Failed to read frame after {max_attempts} attempts.")
+                break
+            frame = cv2.flip(frame, 1)
+            h, w, c = frame.shape
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Thay đổi hands.process sang pose.process
+            results = pose.process(rgb)
+
+            # Thay đổi results.multi_hand_landmarks sang results.pose_landmarks
+            if results.pose_landmarks:
+                # Pose chỉ trả về 1 đối tượng landmarks duy nhất, không dùng vòng lặp for cho nhiều tay
+                mp_draw.draw_landmarks(
+                    frame,
+                    results.pose_landmarks,
+                    mp_pose.POSE_CONNECTIONS,
+                )
+
+                # Giữ nguyên cấu trúc dictionary của bạn nhưng đổi landmark 4, 8, 12, 16, 20 
+                # sang các khớp chân tương ứng từ hông xuống để code không bị lỗi
+                leglandmarks = {
+                  "left_hip": results.pose_landmarks.landmark[23],
+        "left_knee": results.pose_landmarks.landmark[25],
+        "left_ankle": results.pose_landmarks.landmark[27],
+        "left_heel": results.pose_landmarks.landmark[29],
+        "left_toe": results.pose_landmarks.landmark[31],
+        
+        # Chân phải
+        "right_hip": results.pose_landmarks.landmark[24],
+        "right_knee": results.pose_landmarks.landmark[26],
+        "right_ankle": results.pose_landmarks.landmark[28],
+        "right_heel": results.pose_landmarks.landmark[30],
+        "right_toe": results.pose_landmarks.landmark[32],
+                }
+
+                for name, landmark in leglandmarks.items():
+                    x, y = int(landmark.x * w), int(landmark.y * h)
+                    cv2.putText(
+                        frame,
+                        name,
+                        (x, y - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5,
+                        (0, 255, 0),
+                        1,
+                    )
+                    cv2.circle(
+                        frame,
+                        (x, y),
+                        6,
+                        (0, 255, 0),
+                        -1
+                    )
+
+            cv2.imshow("POSE TRACKING", frame)
+
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    main()
